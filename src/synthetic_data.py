@@ -54,17 +54,20 @@ mu_u = np.zeros(dimX)
 Sigma_u = np.eye(dimX)
 sigma_y = 1
 
-n_init_samples, n_unlabeled_samples, n_val_samples = 200, 100, 200 
+n_init_samples, n_unlabeled_samples, n_val_samples, n_test_samples = 200, 100, 200, 200
 blr = BayesianLinearRegression(mu_x, Sigma_x, mu_u, Sigma_u, sigma_y, dimX)
 U_true = blr.U
-seed1, seed2, seed3 = 1, 42, 20
+print(U_true)
+seed1, seed2, seed3, seed4 = 1, 42, 20, 30
 X_init, y_init, _ = blr.generate_data_given_U(blr.U, n_init_samples, seed=seed1, logistic=False, epsilon=None)
 X_pool, y_pool, _ = blr.generate_data_given_U(blr.U, n_unlabeled_samples, seed=seed2, logistic=False, epsilon=None)
 X_val, y_val, _ = blr.generate_data_given_U(blr.U, n_val_samples, seed=seed3, logistic=False, epsilon=None)
+X_test, y_test, _ = blr.generate_data_given_U(blr.U, n_test_samples, seed=seed4, logistic=False, epsilon=None)
 
 X_init, y_init = torch.tensor(X_init), torch.tensor(y_init)
 X_pool, y_pool = torch.tensor(X_pool), torch.tensor(y_pool)
 X_val, y_val = torch.tensor(X_val), torch.tensor(y_val)
+X_test, y_test = torch.tensor(X_test), torch.tensor(y_test)
 
 batch_size = 10
 X_init_batch = X_init.reshape((-1,batch_size))
@@ -72,6 +75,8 @@ y_init_batch = y_init.reshape((-1,batch_size)).mean(dim=1, keepdim=True)
 X_pool_batch = X_pool.reshape((-1,batch_size))
 X_val_batch = X_val.reshape((-1,batch_size))
 y_val_batch = y_val.reshape((-1,batch_size)).mean(dim=1, keepdim=True) 
+X_test_batch = X_test.reshape((-1,batch_size))
+y_test_batch = y_test.reshape((-1,batch_size)).mean(dim=1, keepdim=True) 
 
 # GENERATE DATA FOR SOURCE DOMAIN
 dimX_source = 1  # Dimension for source domain, same as target for simplicity
@@ -98,7 +103,19 @@ y_source = torch.tensor(y_source)
 X_source_batch = X_source.reshape((-1, batch_size))
 y_source_batch = y_source.reshape((-1, batch_size)).mean(dim=1, keepdim=True)
 
+def generate_true_y(x):
+    # Ensure x is in the correct shape
+    x = torch.tensor(x, dtype=torch.float32) if not isinstance(x, torch.Tensor) else x
+    U = torch.tensor(U_true)
+    U_expanded = torch.full((10, 1), U.item())
 
+    # Generate noise
+    epsilon = torch.tensor(np.random.normal(0, sigma_y, size=x.shape[0]))
+
+    # Compute y
+    y = x @ U_expanded + epsilon
+    
+    return y.mean()
 # check sequence generation loss (Can GP approximate ppd?)
 # inference_model = GPRegressionModel(train_x=X_train.flatten(), train_y=y_train.flatten()).double()
 # e = SequenceLossEvaluator()
