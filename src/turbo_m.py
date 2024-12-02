@@ -10,11 +10,8 @@ from turbo.gp import train_gp  # Ensure this module is available
 from turbo import Turbo1  # Ensure this module is available
 from turbo.utils import from_unit_cube, latin_hypercube, to_unit_cube
 from turbo.utility import ExpectedImprovementCustom
-
-# Import BoTorch components
-from botorch.acquisition import AcquisitionFunction
+from botorch.acquisition import ExpectedImprovement
 from botorch.optim import optimize_acqf
-
 
 class TurboM(Turbo1):
     """The TuRBO-M algorithm with a customizable acquisition function.
@@ -51,20 +48,6 @@ class TurboM(Turbo1):
         Data type to use for GP fitting ("float32" or "float64") (default is "float64").
     utility_function_class : class, optional
         Custom utility function class for the acquisition function (default is None).
-
-    Example
-    -------
-    turbo_m = TurboM(
-        f=f,
-        lb=lb,
-        ub=ub,
-        n_init=10,
-        max_evals=200,
-        n_trust_regions=5,
-        utility_function_class=ExpectedImprovementCustom,
-    )
-    turbo_m.optimize()  # Run optimization
-    X, fX = turbo_m.X, turbo_m.fX  # Evaluated points
     """
 
     def __init__(
@@ -75,6 +58,8 @@ class TurboM(Turbo1):
         n_init,
         max_evals,
         n_trust_regions,
+        X_init=None,
+        fX_init=None,
         batch_size=1,
         verbose=True,
         use_ard=True,
@@ -86,6 +71,9 @@ class TurboM(Turbo1):
         utility_function_class=None,
     ):
         self.n_trust_regions = n_trust_regions
+        self.X_init = X_init
+        self.fX_init = fX_init
+        
         super().__init__(
             f=f,
             lb=lb,
@@ -101,6 +89,7 @@ class TurboM(Turbo1):
             device=device,
             dtype=dtype,
         )
+        
 
         self.succtol = 3
         self.failtol = max(5, self.dim)
@@ -235,22 +224,49 @@ class TurboM(Turbo1):
 
     def optimize(self):
         """Run the full optimization process."""
-        # Create initial points for each trust region
-        for i in range(self.n_trust_regions):
-            X_init = latin_hypercube(self.n_init, self.dim)
-            X_init = from_unit_cube(X_init, self.lb, self.ub)
-            fX_init = np.array([[self.f(x)] for x in X_init])
+        # Check if initial data is provided
+        if self.X_init is not None and self.fX_init is not None:
+            # Use the provided initial data
+            assert self.X_init.shape[0] == self.fX_init.shape[0], "Mismatch in initial data sizes"
+            assert self.X_init.shape[1] == self.dim, "Dimension mismatch in X_init"
+            n_init_total = self.X_init.shape[0]
+            n_init_per_tr = n_init_total // self.n_trust_regions
 
-            # Update budget and set as initial data for this trust region
-            self.X = np.vstack((self.X, X_init))
-            self.fX = np.vstack((self.fX, fX_init))
-            self._idx = np.vstack((self._idx, i * np.ones((self.n_init, 1), dtype=int)))
-            self.n_evals += self.n_init
+            # Assign initial data to each trust region
+            for i in range(self.n_trust_regions):
+                idx_start = i * n_init_per_tr
+                idx_end = idx_start + n_init_per_tr
+                X_init_i = self.X_init[idx_start:idx_end, :]
+                fX_init_i = self.fX_init[idx_start:idx_end]
 
-            if self.verbose:
-                fbest = fX_init.min()
-                print(f"TR-{i} starting from: {fbest:.4f}")
-                sys.stdout.flush()
+                # Update budget and set as initial data for this trust region
+                self.X = np.vstack((self.X, X_init_i))
+                self.fX = np.vstack((self.fX, fX_init_i))
+                self._idx = np.vstack((self._idx, i * np.ones((n_init_per_tr, 1), dtype=int)))
+                self.n_evals += n_init_per_tr
+
+                if self.verbose:
+                    fbest = fX_init_i.min()
+                    print(f"TR-{i} starting from provided data: {fbest:.4f}")
+                    sys.stdout.flush()
+        else:
+            # Create initial points for each trust region using LHS
+            for i in range(self.n_trust_regions):
+                X_init = latin_hypercube(self.n_init, self.dim)
+                X_init = from_unit_cube(X_init, self.lb, self.ub)
+                fX_init = np.array([[self.f(x)] for x in X_init])
+
+                # Update budget and set as initial data for this trust region
+                self.X = np.vstack((self.X, X_init))
+                self.fX = np.vstack((self.fX, fX_init))
+                self._idx = np.vstack((self._idx, i * np.ones((self.n_init, 1), dtype=int)))
+                self.n_evals += self.n_init
+
+                if self.verbose:
+                    fbest = fX_init.min()
+                    print(f"TR-{i} starting from: {fbest:.4f}")
+                    sys.stdout.flush()
+
 
         # Main optimization loop
         while self.n_evals < self.max_evals:
