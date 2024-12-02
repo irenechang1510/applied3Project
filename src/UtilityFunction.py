@@ -1,3 +1,4 @@
+
 import numpy as np
 import gpytorch, torch, torchvision
 import torch.nn as nn
@@ -31,7 +32,8 @@ class UtilityFunction(nn.Module):
         for seed in tqdm(range(self.n_repeats)):
             newX, newy = self.sample_conditional_mean_gp(
                 torch.tensor(X_init), torch.tensor(y_init), 
-                torch.tensor(X_rem), seed)
+                torch.tensor(X_rem) if X_rem is not None else None, 
+                seed)
             
             # refit the posterior classifier on X_context and y_context
             new_classifier = self.classifier.fit(newX, newy)
@@ -39,9 +41,9 @@ class UtilityFunction(nn.Module):
             loss = self.loss_function(new_preds, y_val)
             loss_list.append(loss)
 
-        return np.array(loss_list).mean()
+        return torch.tensor(loss_list).mean().reshape(1, 1)
 
-    def sample_conditional_mean_gp(self, X_init, y_init, X_rem, seed):
+    def sample_conditional_mean_gp(self, X_init, y_init, X_rem = None, seed = None):
         # execution_device = check_model_device_type(model)
         sequence_model = GPRegressionModel(train_x=X_init.flatten(), train_y=y_init.flatten()).double()
 
@@ -51,7 +53,8 @@ class UtilityFunction(nn.Module):
         X_context, y_context = deepcopy(X_init), deepcopy(y_init)
         sequence_model.eval()
         sequence_model.likelihood.eval()
-        for i in range(X_rem.shape[0]):
+        generation_window = X_rem.shape[0] if X_rem is not None else 0
+        for i in range(generation_window):
             next_token = X_rem[i]
             y_hat= sequence_model.predict(next_token)
             y_hat = y_hat.to('cpu') if hasattr(y_hat, 'device') else y_hat
@@ -67,11 +70,11 @@ class UtilityFunction(nn.Module):
 
 
 # EXAMPLE USAGE
-from src.synthetic_data import X_init, y_init, X_pool, X_val, y_val
-from sklearn.metrics import mean_squared_error
-from sklearn.linear_model import LinearRegression # replace with MLP (also need to change line 38)
-from src.UtilityFunction import UtilityFunction
-lr = LinearRegression()
-ufunc = UtilityFunction(mean_squared_error, lr)
-loss = ufunc(X_init, y_init, X_pool, X_val, y_val)
-print(loss)
+# from src.synthetic_data import X_init, y_init, X_pool, X_val, y_val
+# from sklearn.metrics import mean_squared_error
+# from sklearn.linear_model import LinearRegression # replace with MLP (also need to change line 38)
+# from src.UtilityFunction import UtilityFunction
+# lr = LinearRegression()
+# ufunc = UtilityFunction(mean_squared_error, lr)
+# loss = ufunc(X_init, y_init, None, X_val, y_val)
+# print(loss)
