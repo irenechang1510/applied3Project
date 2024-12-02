@@ -66,6 +66,13 @@ X_init, y_init = torch.tensor(X_init), torch.tensor(y_init)
 X_pool, y_pool = torch.tensor(X_pool), torch.tensor(y_pool)
 X_val, y_val = torch.tensor(X_val), torch.tensor(y_val)
 
+batch_size = 10
+X_init_batch = X_init.reshape((-1,batch_size))
+y_init_batch = y_init.reshape((-1,batch_size)).mean(dim=1, keepdim=True) 
+X_pool_batch = X_pool.reshape((-1,batch_size))
+X_val_batch = X_val.reshape((-1,batch_size))
+y_val_batch = y_val.reshape((-1,batch_size)).mean(dim=1, keepdim=True) 
+
 # check sequence generation loss (Can GP approximate ppd?)
 # inference_model = GPRegressionModel(train_x=X_train.flatten(), train_y=y_train.flatten()).double()
 # e = SequenceLossEvaluator()
