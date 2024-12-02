@@ -5,8 +5,9 @@ import torch.nn as nn
 from copy import deepcopy
 from tqdm import tqdm
 from src.GaussianProcess import GPRegressionModel
-# from torchvision import M
+import torch.optim as optim
 from src.utils import ignoreWarnings
+
 ignoreWarnings()
 class UtilityFunction(nn.Module):
     def __init__(self, loss_function, classifier, n_repeats = 100):
@@ -16,7 +17,7 @@ class UtilityFunction(nn.Module):
         '''
         super().__init__()
         self.loss_function = loss_function
-        self.classifier = classifier
+        self.classifier = deepcopy(classifier) # this will be the mlp
         self.n_repeats = n_repeats
     
     def forward(self, 
@@ -36,15 +37,31 @@ class UtilityFunction(nn.Module):
                 seed)
             
             # refit the posterior classifier on X_context and y_context
-            new_classifier = self.classifier.fit(newX, newy)
-            new_preds = new_classifier.predict(X_val)
+            self.update_predictive_model(newX, newy)
+            
+            self.classifier.eval()
+            with torch.no_grad(): new_preds = self.classifier(X_val)
             loss = self.loss_function(new_preds, y_val)
             loss_list.append(loss)
 
         return torch.tensor(loss_list).mean().reshape(1, 1)
 
+    def update_predictive_model(self, X, y):
+        '''
+        update the MLP with an extra (X, y) pair using 1-step gradient update
+        '''
+        self.classifier.train()
+        criterion = nn.MSELoss()
+        optimizer = optim.Adam(self.classifier.parameters(), lr=0.001)
+
+        optimizer.zero_grad()
+        outputs = self.classifier(X)
+        loss = criterion(outputs, y)
+        loss.backward()
+        optimizer.step()
+        return self.classifier
+
     def sample_conditional_mean_gp(self, X_init, y_init, X_rem = None, seed = None):
-        # execution_device = check_model_device_type(model)
         sequence_model = GPRegressionModel(train_x=X_init.flatten(), train_y=y_init.flatten()).double()
 
         #bootstrap generation_window samples from X_rem
@@ -67,7 +84,6 @@ class UtilityFunction(nn.Module):
             y_context = torch.vstack([y_context, y_hat])
             
         return X_context.detach().numpy(), y_context.detach().numpy()
-
 
 # EXAMPLE USAGE
 # from src.synthetic_data import X_init, y_init, X_pool, X_val, y_val
