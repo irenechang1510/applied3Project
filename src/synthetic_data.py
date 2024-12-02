@@ -73,6 +73,32 @@ X_pool_batch = X_pool.reshape((-1,batch_size))
 X_val_batch = X_val.reshape((-1,batch_size))
 y_val_batch = y_val.reshape((-1,batch_size)).mean(dim=1, keepdim=True) 
 
+# GENERATE DATA FOR SOURCE DOMAIN
+dimX_source = 1  # Dimension for source domain, same as target for simplicity
+mu_x_source = np.ones(dimX_source)  # Different mean for source domain
+Sigma_x_source = 2 * np.eye(dimX_source)  # Different covariance for source domain
+mu_u_source = np.ones(dimX_source)  # Different mean for source U
+Sigma_u_source = 1.5 * np.eye(dimX_source)  # Different covariance for source U
+sigma_y_source = 1.5  # Different noise level for source domain
+
+n_source_samples = 1000  # Number of samples for the source domain
+seed_source = 123  # Seed for reproducibility
+
+# Create a BayesianLinearRegression object for the source domain
+blr_source = BayesianLinearRegression(mu_x_source, Sigma_x_source, mu_u_source, Sigma_u_source, sigma_y_source, dimX_source)
+
+# Generate source domain data
+U_source = blr_source.U
+X_source, y_source, _ = blr_source.generate_data_given_U(U_source, n_source_samples, seed=seed_source, logistic=False, epsilon=None)
+
+# Convert source data to PyTorch tensors and batch them
+X_source = torch.tensor(X_source)
+y_source = torch.tensor(y_source)
+
+X_source_batch = X_source.reshape((-1, batch_size))
+y_source_batch = y_source.reshape((-1, batch_size)).mean(dim=1, keepdim=True)
+
+
 # check sequence generation loss (Can GP approximate ppd?)
 # inference_model = GPRegressionModel(train_x=X_train.flatten(), train_y=y_train.flatten()).double()
 # e = SequenceLossEvaluator()
