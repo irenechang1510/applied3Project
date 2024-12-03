@@ -1,4 +1,5 @@
-
+import sys
+sys.path.append('/Users/irenechang/Documents/GitHub/applied3Project')
 import numpy as np
 import gpytorch, torch, torchvision
 import torch.nn as nn
@@ -10,7 +11,7 @@ from src.utils import ignoreWarnings
 
 ignoreWarnings()
 class UtilityFunction(nn.Module):
-    def __init__(self, loss_function, classifier, n_repeats = 100):
+    def __init__(self, loss_function, classifier, n_repeats = 100, batch_size = 10):
         '''
         loss_function: e.g MSE loss
         classifier: e.g 
@@ -19,6 +20,7 @@ class UtilityFunction(nn.Module):
         self.loss_function = loss_function
         self.classifier = deepcopy(classifier) # this will be the mlp
         self.n_repeats = n_repeats
+        self.batch_size = batch_size
     
     def forward(self, 
                 X_init: np.ndarray, y_init: np.ndarray, 
@@ -40,7 +42,8 @@ class UtilityFunction(nn.Module):
             self.update_predictive_model(newX, newy)
             
             self.classifier.eval()
-            with torch.no_grad(): new_preds = self.classifier(X_val)
+            
+            with torch.no_grad(): new_preds = self.classifier(X_val.float())
             loss = self.loss_function(new_preds, y_val)
             loss_list.append(loss)
 
@@ -50,19 +53,24 @@ class UtilityFunction(nn.Module):
         '''
         update the MLP with an extra (X, y) pair using 1-step gradient update
         '''
-        self.classifier.train()
-        criterion = nn.MSELoss()
-        optimizer = optim.Adam(self.classifier.parameters(), lr=0.001)
+        # reshape into the right batch size
+        with torch.enable_grad():
+            X = X.reshape((-1, self.batch_size)).float()
+            y = y.reshape((-1, self.batch_size)).float()
+            
+            self.classifier.train()
+            criterion = nn.MSELoss()
+            optimizer = optim.Adam(self.classifier.parameters(), lr=0.001)
 
-        optimizer.zero_grad()
-        outputs = self.classifier(X)
-        loss = criterion(outputs, y)
-        loss.backward()
-        optimizer.step()
+            optimizer.zero_grad()
+            outputs = self.classifier(X)
+            loss = criterion(outputs, y)
+            loss.backward()
+            optimizer.step()
         return self.classifier
 
     def sample_conditional_mean_gp(self, X_init, y_init, X_rem = None, seed = None):
-        sequence_model = GPRegressionModel(train_x=X_init.flatten(), train_y=y_init.flatten()).double()
+        sequence_model = GPRegressionModel(train_x=X_init, train_y=y_init.flatten()).double()
 
         #bootstrap generation_window samples from X_rem
         np.random.seed(seed)        
@@ -83,14 +91,6 @@ class UtilityFunction(nn.Module):
             X_context = torch.vstack([X_context, next_token])
             y_context = torch.vstack([y_context, y_hat])
             
-        return X_context.detach().numpy(), y_context.detach().numpy()
+        return X_context, y_context
 
 # EXAMPLE USAGE
-# from src.synthetic_data import X_init, y_init, X_pool, X_val, y_val
-# from sklearn.metrics import mean_squared_error
-# from sklearn.linear_model import LinearRegression # replace with MLP (also need to change line 38)
-# from src.UtilityFunction import UtilityFunction
-# lr = LinearRegression()
-# ufunc = UtilityFunction(mean_squared_error, lr)
-# loss = ufunc(X_init, y_init, None, X_val, y_val)
-# print(loss)

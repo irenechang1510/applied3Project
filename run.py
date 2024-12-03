@@ -1,25 +1,79 @@
 import numpy as np
 from turbo.utility import ExpectedImprovementCustom  # Import your utility function class
 from src.turbo_m import TurboM
-from src.synthetic_data import X_init, y_init, X_pool, X_val, y_val, X_init_batch, y_init_batch, X_pool_batch, X_val_batch, y_val_batch
+from src.synthetic_data import X_init, y_init, X_pool, X_val, y_val, X_init_batch, y_init_batch, X_pool_batch, X_val_batch, y_val_batch, X_source_batch, y_source_batch
+import torch
+import torch.nn as nn, torch.optim as optim
+from train import MLP
 
 # Problem dimensions and bounds
 dim = 10
 lb = np.zeros(dim)
 ub = np.ones(dim)
 
-# Define the objective function to minimize
-def sphere_function(x):
-    return np.sum(x ** 2)
+X_source_batch = X_source_batch.float()
+y_source_batch = y_source_batch.float()
+X_init_batch = X_init_batch.float()
+y_init_batch = y_init_batch.float()
+
+input_dim = X_source_batch.shape[-1]
+hidden_dim = 32  # Hidden layer size
+output_dim = y_source_batch.shape[-1]
+assert output_dim==1
+
+# Initialize the model, loss function, and optimizer
+mlp = MLP(input_dim, hidden_dim, output_dim)
+criterion = nn.MSELoss()
+optimizer = optim.Adam(mlp.parameters(), lr=0.001)
+
+# Training loop for the source domain
+num_epochs_source = 20  # Number of epochs for source domain
+for epoch in range(num_epochs_source):
+    for i in range(X_source_batch.shape[0]):
+        X_batch = X_source_batch[i]
+        y_batch = y_source_batch[i]
+
+        # Forward pass
+        y_pred = mlp(X_batch)
+
+        # Compute loss
+        loss = criterion(y_pred, y_batch)
+
+        # Backward pass and optimization
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+    print(f"Epoch [{epoch + 1}/{num_epochs_source}], Loss: {loss.item():.4f}")
+
+# Fine-tuning with the target domain (initialization batches)
+num_epochs_target = 5  # Number of epochs for target domain
+for epoch in range(num_epochs_target):
+    for i in range(X_init_batch.shape[0]):
+        X_batch = X_init_batch[i]
+        y_batch = y_init_batch[i]
+
+        # Forward pass
+        y_pred = mlp(X_batch)
+
+        # Compute loss
+        loss = criterion(y_pred, y_batch)
+
+        # Backward pass and optimization
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+    print(f"Fine-tuning Epoch [{epoch + 1}/{num_epochs_target}], Loss: {loss.item():.4f}")
 
 # Initialize the TuRBO-M optimizer
 turbo_m = TurboM(
-    f=sphere_function,
+    f=mlp,
     lb=lb,
     ub=ub,
     n_init=2 * dim,
-    max_evals=200,
-    n_trust_regions=5,
+    max_evals=50,
+    n_trust_regions=2,
     batch_size=1,
     verbose=True,
     utility_function_class=ExpectedImprovementCustom,

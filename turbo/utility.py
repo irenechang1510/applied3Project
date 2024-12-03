@@ -2,8 +2,9 @@ from botorch.acquisition import AcquisitionFunction
 import torch
 from src.UtilityFunction import UtilityFunction
 from src.synthetic_data import X_init, y_init, X_pool, X_val, y_val, X_init_batch, y_init_batch, X_pool_batch, X_val_batch, y_val_batch
-from sklearn.metrics import mean_squared_error
-from sklearn.linear_model import LinearRegression
+from torch.nn import MSELoss
+from train import MLP
+myMLP = torch.load('model/mlp_trained_model.pth')
 
 class ExpectedImprovementCustom(AcquisitionFunction):
     """Custom Expected Improvement acquisition function."""
@@ -49,11 +50,12 @@ class ExpectedImprovementCustom(AcquisitionFunction):
 
         # # Compute Expected Improvement
         # ei = sigma * (u * ucdf + updf)
-
-        lr = LinearRegression()
-        ufunc = UtilityFunction(mean_squared_error, lr)
+        mean_squared_error = MSELoss()
+        # ufunc = UtilityFunction(mean_squared_error, f) # TODO: HOW TO PASS f IN
+        ufunc = UtilityFunction(mean_squared_error, myMLP)
         X = X.reshape((-1,1))
         ## TODO: implement the loss before adding new batch 
-        loss = ufunc(X_init, y_init, X, X_val, y_val)
+        before_loss = ufunc(X_init, y_init, None, X_val_batch, y_val_batch)
+        after_loss = ufunc(X_init, y_init, X, X_val_batch, y_val_batch)
         # print(loss)
-        return loss
+        return before_loss - after_loss
