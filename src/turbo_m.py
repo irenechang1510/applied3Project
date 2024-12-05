@@ -178,23 +178,47 @@ class TurboM(Turbo1):
             hypers = model.state_dict()
 
         # Define the acquisition function using your utility function class
-        best_f = fX_normalized.min().item()
+        best_f = fX_normalized.min() #.item()
         acquisition_function = self.utility_function_class(model, best_f=best_f)
 
         # Optimize the acquisition function to find candidate points
         X_cand = self.optimize_acquisition_function(acquisition_function, length)
-        X_cand = X_cand.detach().cpu().numpy()
+        y_cand = acquisition_function(X_cand)
 
-        # Evaluate the acquisition function at candidate points
-        y_cand = acquisition_function(
-            torch.tensor(X_cand, dtype=self.dtype, device=self.device)
-        )
-        y_cand = y_cand.detach().cpu().numpy().ravel()
+        X_cand_np = X_cand.detach().cpu().numpy()
+        y_cand_np = y_cand.detach().cpu().numpy().ravel()
+        return X_cand_np, y_cand_np, hypers
 
-        return X_cand, y_cand, hypers
+    # def optimize_acquisition_function(self, acquisition_function, length):
+    #     # Ensure self.center is a torch tensor
+    #     if not isinstance(self.center, torch.Tensor):
+    #         self.center = torch.tensor(self.center, dtype=self.dtype, device=self.device)
+        
+    #     # Define bounds for the trust region using torch.clamp
+    #     tr_lb = torch.clamp(self.center - length / 2.0, min=0.0, max=1.0)
+    #     tr_ub = torch.clamp(self.center + length / 2.0, min=0.0, max=1.0)
+        
+    #     # Stack bounds into a tensor
+    #     bounds = torch.stack([tr_lb, tr_ub])
 
+    #     # Generate initial points within the bounds
+    #     X_init = latin_hypercube(self.n_cand, self.dim)
+    #     X_init = torch.tensor(X_init, dtype=self.dtype, device=self.device)
+    #     X_init = tr_lb + (tr_ub - tr_lb) * X_init  # Scale to trust region bounds
+
+    #     # Optimize the acquisition function
+    #     X_cand, _ = optimize_acqf(
+    #         acq_function=acquisition_function,
+    #         bounds=bounds,
+    #         q=self.batch_size,
+    #         num_restarts=10,
+    #         raw_samples=100,
+    #         options={"batch_limit": 5, "maxiter": 200},
+    #     )
+    #     return X_cand
+    
     def optimize_acquisition_function(self, acquisition_function, length):
-        # Ensure self.center is a torch tensor
+    # Ensure self.center is a torch tensor
         if not isinstance(self.center, torch.Tensor):
             self.center = torch.tensor(self.center, dtype=self.dtype, device=self.device)
         
@@ -202,24 +226,27 @@ class TurboM(Turbo1):
         tr_lb = torch.clamp(self.center - length / 2.0, min=0.0, max=1.0)
         tr_ub = torch.clamp(self.center + length / 2.0, min=0.0, max=1.0)
         
-        # Stack bounds into a tensor
+        # Ensure bounds have the correct shape
+        tr_lb = tr_lb.view(-1)
+        tr_ub = tr_ub.view(-1)
         bounds = torch.stack([tr_lb, tr_ub])
 
-        # Generate initial points within the bounds
-        X_init = latin_hypercube(self.n_cand, self.dim)
-        X_init = torch.tensor(X_init, dtype=self.dtype, device=self.device)
-        X_init = tr_lb + (tr_ub - tr_lb) * X_init  # Scale to trust region bounds
+        # Increase raw_samples and num_restarts for higher dimensions
+        raw_samples = max(156, 10 * self.dim)
+        num_restarts = max(20, 2 * self.dim)
 
         # Optimize the acquisition function
         X_cand, _ = optimize_acqf(
             acq_function=acquisition_function,
             bounds=bounds,
             q=self.batch_size,
-            num_restarts=10,
-            raw_samples=100,
+            num_restarts=num_restarts,
+            raw_samples=raw_samples,
             options={"batch_limit": 5, "maxiter": 200},
         )
+
         return X_cand
+
 
 
     def optimize(self):
