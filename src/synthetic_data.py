@@ -1,6 +1,5 @@
 import numpy as np
 from scipy.stats import multivariate_normal
-# from src.GaussianProcess import GPRegressionModel
 import torch
 
 class BayesianLinearRegression:
@@ -35,16 +34,20 @@ class BayesianLinearRegression:
             y_sigmoid = 1 / (1 + np.exp(-y))
             y = np.random.binomial(1, y_sigmoid)
 
-        #unsqueeze if dimX = 1
+        # Reshape if dimX = 1
         if self.dimX == 1:
             X = X.reshape(-1, 1)
+        
+        # Convert X, y, epsilon to torch tensors
+        X = torch.from_numpy(X).double()           # double precision for consistency
+        y = torch.from_numpy(y.reshape(-1, 1)).double()
+        epsilon = torch.from_numpy(epsilon).double()
 
-        # X, y both have ndim = 2
-        return X, y.reshape(-1, 1), epsilon
+        return X, y, epsilon
 
     def sample_from_posterior(self, posterior_mean, posterior_cov):
         return multivariate_normal.rvs(mean=posterior_mean, cov=posterior_cov)
-        
+
 
 # GENERATE DATA FOR TARGET DOMAIN
 dimX = 1
@@ -54,46 +57,38 @@ mu_u = np.zeros(dimX)
 Sigma_u = np.eye(dimX)
 sigma_y = 1
 
-n_init_samples, n_unlabeled_samples, n_val_samples = 200, 100, 200 
+n_init_samples, n_unlabeled_samples, n_val_samples = 200, 100, 200
 blr = BayesianLinearRegression(mu_x, Sigma_x, mu_u, Sigma_u, sigma_y, dimX)
 U_true = blr.U
 seed1, seed2, seed3 = 1, 42, 20
+
+# Now these returned values are already torch tensors
 X_init, y_init, _ = blr.generate_data_given_U(blr.U, n_init_samples, seed=seed1, logistic=False, epsilon=None)
 X_pool, y_pool, _ = blr.generate_data_given_U(blr.U, n_unlabeled_samples, seed=seed2, logistic=False, epsilon=None)
 X_val, y_val, _ = blr.generate_data_given_U(blr.U, n_val_samples, seed=seed3, logistic=False, epsilon=None)
 
-X_init, y_init = torch.tensor(X_init), torch.tensor(y_init)
-X_pool, y_pool = torch.tensor(X_pool), torch.tensor(y_pool)
-X_val, y_val = torch.tensor(X_val), torch.tensor(y_val)
-
+# All these are already torch tensors, no need to convert
 batch_size = 10
-X_init_batch = X_init.reshape((-1,batch_size))
-y_init_batch = y_init.reshape((-1,batch_size)).mean(dim=1, keepdim=True) 
-X_pool_batch = X_pool.reshape((-1,batch_size))
-X_val_batch = X_val.reshape((-1,batch_size))
-y_val_batch = y_val.reshape((-1,batch_size)).mean(dim=1, keepdim=True) 
+X_init_batch = X_init.reshape((-1, batch_size))
+y_init_batch = y_init.reshape((-1, batch_size)).mean(dim=1, keepdim=True) 
+X_pool_batch = X_pool.reshape((-1, batch_size))
+X_val_batch = X_val.reshape((-1, batch_size))
+y_val_batch = y_val.reshape((-1, batch_size)).mean(dim=1, keepdim=True) 
 
 # GENERATE DATA FOR SOURCE DOMAIN
-dimX_source = 1  # Dimension for source domain, same as target for simplicity
-mu_x_source = np.ones(dimX_source)  # Different mean for source domain
-Sigma_x_source = 2 * np.eye(dimX_source)  # Different covariance for source domain
-mu_u_source = np.ones(dimX_source)  # Different mean for source U
-Sigma_u_source = 1.5 * np.eye(dimX_source)  # Different covariance for source U
-sigma_y_source = 1.5  # Different noise level for source domain
+dimX_source = 1
+mu_x_source = np.ones(dimX_source)
+Sigma_x_source = 2 * np.eye(dimX_source)
+mu_u_source = np.ones(dimX_source)
+Sigma_u_source = 1.5 * np.eye(dimX_source)
+sigma_y_source = 1.5
 
-n_source_samples = 1000  # Number of samples for the source domain
-seed_source = 123  # Seed for reproducibility
+n_source_samples = 1000
+seed_source = 123
 
-# Create a BayesianLinearRegression object for the source domain
 blr_source = BayesianLinearRegression(mu_x_source, Sigma_x_source, mu_u_source, Sigma_u_source, sigma_y_source, dimX_source)
-
-# Generate source domain data
 U_source = blr_source.U
 X_source, y_source, _ = blr_source.generate_data_given_U(U_source, n_source_samples, seed=seed_source, logistic=False, epsilon=None)
-
-# Convert source data to PyTorch tensors and batch them
-X_source = torch.tensor(X_source)
-y_source = torch.tensor(y_source)
 
 X_source_batch = X_source.reshape((-1, batch_size))
 y_source_batch = y_source.reshape((-1, batch_size)).mean(dim=1, keepdim=True)

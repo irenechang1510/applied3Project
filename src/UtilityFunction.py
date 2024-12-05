@@ -23,31 +23,30 @@ class UtilityFunction(nn.Module):
         self.batch_size = batch_size
     
     def forward(self, 
-                X_init: np.ndarray, y_init: np.ndarray, 
-                X_rem: np.ndarray, X_val: np.ndarray, y_val: np.ndarray):
-        '''
-        (X_init, y_init): \mathcal{D}_0 
-        X_rem: batch b = \{(x_i, y_i)\}_{i=1}^n
+            X_init: torch.Tensor, y_init: torch.Tensor, 
+            X_rem: torch.Tensor, X_val: torch.Tensor, y_val: torch.Tensor):
 
-        '''
+        # Ensure that X_init requires grad
+        # X_rem.requires_grad_(True)
+        # assert X_rem.requires_grad, "X_init does not require grad, please set requires_grad=True."
+
         loss_list = []
         # repeat to account for randomness in sampling Y from ppd
         for seed in tqdm(range(self.n_repeats)):
-            newX, newy = self.sample_conditional_mean_gp(
-                torch.tensor(X_init), torch.tensor(y_init), 
-                torch.tensor(X_rem) if X_rem is not None else None, 
-                seed)
+            newX, newy = self.sample_conditional_mean_gp(X_init, y_init, X_rem if X_rem is not None else None,seed)
             
             # refit the posterior classifier on X_context and y_context
             self.update_predictive_model(newX, newy)
             
             self.classifier.eval()
             
-            with torch.no_grad(): new_preds = self.classifier(X_val.float())
+            X_val = X_val.float()  # Convert to torch.float32
+            y_val = y_val.float()
+            new_preds = self.classifier(X_val)
             loss = self.loss_function(new_preds, y_val)
             loss_list.append(loss)
 
-        return torch.tensor(loss_list).mean().reshape(1, 1)
+        return torch.stack(loss_list).mean().reshape(1, 1)
 
     def update_predictive_model(self, X, y):
         '''
