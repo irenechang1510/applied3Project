@@ -1,10 +1,18 @@
+import sys
+sys.path.append('/Users/yhan/Desktop/appliedproject/applied3Project')
 from botorch.acquisition import AcquisitionFunction
 import torch
 from src.UtilityFunction import UtilityFunction
 from src.synthetic_data import X_init, y_init, X_pool, X_val, y_val, X_init_batch, y_init_batch, X_pool_batch, X_val_batch, y_val_batch
 from torch.nn import MSELoss
 from train import MLP
-myMLP = torch.load('model/mlp_trained_model.pth')
+
+# import os
+# current_file_directory = os.path.dirname(os.path.abspath(__file__))
+# parent_directory = os.path.dirname(current_file_directory)
+# data_dir = os.path.join(parent_directory, "sampling")
+# output_dir = os.path.join(data_dir, "figs")  # Directory to save the figures
+myMLP = torch.load('/Users/yhan/Desktop/appliedproject/applied3Project/model/mlp_trained_model.pth')
 
 class ExpectedImprovementCustom(AcquisitionFunction):
     """Custom Expected Improvement acquisition function."""
@@ -50,12 +58,19 @@ class ExpectedImprovementCustom(AcquisitionFunction):
 
         # # Compute Expected Improvement
         # ei = sigma * (u * ucdf + updf)
-        mean_squared_error = MSELoss()
-        # ufunc = UtilityFunction(mean_squared_error, f) # TODO: HOW TO PASS f IN
-        ufunc = UtilityFunction(mean_squared_error, myMLP)
-        X = X.reshape((-1,1))
-        ## TODO: implement the loss before adding new batch 
-        before_loss = ufunc(X_init, y_init, None, X_val_batch, y_val_batch)
-        after_loss = ufunc(X_init, y_init, X, X_val_batch, y_val_batch)
-        # print(loss)
-        return before_loss - after_loss
+        with torch.set_grad_enabled(True):
+            mean_squared_error = MSELoss()
+            # ufunc = UtilityFunction(mean_squared_error, f) # TODO: HOW TO PASS f IN
+            ufunc = UtilityFunction(mean_squared_error, myMLP, n_repeats=1)
+            X.requires_grad_(True)
+            X = X.reshape((-1,1))
+            before_loss = ufunc(X_init, y_init, None, X_val_batch, y_val_batch)
+            after_loss = ufunc(X_init, y_init, X, X_val_batch, y_val_batch)
+            # print(loss)
+            reduc = (before_loss - after_loss).view(-1)
+
+            print(f"reduc requires_grad: {reduc.requires_grad}")
+            print(f"X_init requires_grad: {X_init.requires_grad}")
+            print(f"y_init requires_grad: {y_init.requires_grad}")
+
+        return reduc
