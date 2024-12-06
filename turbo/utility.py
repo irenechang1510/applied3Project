@@ -1,5 +1,5 @@
 import sys
-sys.path.append('/Users/yhan/Desktop/appliedproject/applied3Project')
+sys.path.append('~/Documents/GitHub/applied3Project')
 from botorch.acquisition import AcquisitionFunction
 import torch
 from src.UtilityFunction import UtilityFunction
@@ -12,12 +12,12 @@ from train import MLP
 # parent_directory = os.path.dirname(current_file_directory)
 # data_dir = os.path.join(parent_directory, "sampling")
 # output_dir = os.path.join(data_dir, "figs")  # Directory to save the figures
-myMLP = torch.load('/Users/yhan/Desktop/appliedproject/applied3Project/model/mlp_trained_model.pth')
+myMLP = torch.load('model/mlp_trained_model.pth')
 
 class ExpectedImprovementCustom(AcquisitionFunction):
     """Custom Expected Improvement acquisition function."""
 
-    def __init__(self, model, best_f):
+    def __init__(self, model, best_f, init_set, val_set):
         """Initialize the acquisition function.
 
         Parameters
@@ -29,6 +29,8 @@ class ExpectedImprovementCustom(AcquisitionFunction):
         """
         super().__init__(model)
         self.best_f = best_f
+        self.X_init, self.y_init = init_set
+        self.X_val, self.y_val = val_set # these are batched
 
     def forward(self, X):
         """Compute the Expected Improvement at points X.
@@ -58,19 +60,15 @@ class ExpectedImprovementCustom(AcquisitionFunction):
 
         # # Compute Expected Improvement
         # ei = sigma * (u * ucdf + updf)
-        with torch.set_grad_enabled(True):
-            mean_squared_error = MSELoss()
-            # ufunc = UtilityFunction(mean_squared_error, f) # TODO: HOW TO PASS f IN
-            ufunc = UtilityFunction(mean_squared_error, myMLP, n_repeats=1)
-            X.requires_grad_(True)
-            X = X.reshape((-1,1))
-            before_loss = ufunc(X_init, y_init, None, X_val_batch, y_val_batch)
-            after_loss = ufunc(X_init, y_init, X, X_val_batch, y_val_batch)
-            # print(loss)
-            reduc = (before_loss - after_loss).view(-1)
-
-            print(f"reduc requires_grad: {reduc.requires_grad}")
-            print(f"X_init requires_grad: {X_init.requires_grad}")
-            print(f"y_init requires_grad: {y_init.requires_grad}")
+        # with torch.set_grad_enabled(True):
+        mean_squared_error = MSELoss()
+        # ufunc = UtilityFunction(mean_squared_error, f) # TODO: HOW TO PASS f IN
+        ufunc = UtilityFunction(mean_squared_error, myMLP, n_repeats=1)
+        X_detached = X.detach().requires_grad_()
+        X_reshaped = X_detached.contiguous().reshape((-1,1))
+        before_loss = ufunc(self.X_init.view((-1,1)), self.y_init.view((-1,1)), None, self.X_val, self.y_val)
+        after_loss = ufunc(self.X_init.view((-1,1)), self.y_init.view((-1,1)), X_reshaped, self.X_val, self.y_val)
+        # print(loss)
+        reduc = (before_loss - after_loss).view(-1)
 
         return reduc

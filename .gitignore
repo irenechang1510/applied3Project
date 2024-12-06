@@ -1,5 +1,9 @@
 .vscode/
 mlp_trained_model*
+results.ipynb
+sequence_loss_evaluators.py
+graph
+graph.png 
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

@@ -70,10 +70,10 @@ X_val, y_val, _ = blr.generate_data_given_U(blr.U, n_val_samples, seed=seed3, lo
 # All these are already torch tensors, no need to convert
 batch_size = 10
 X_init_batch = X_init.reshape((-1, batch_size))
-y_init_batch = y_init.reshape((-1, batch_size)).mean(dim=1, keepdim=True) 
+y_init_batch = y_init.reshape((-1, batch_size))#.mean(dim=1, keepdim=True) 
 X_pool_batch = X_pool.reshape((-1, batch_size))
 X_val_batch = X_val.reshape((-1, batch_size))
-y_val_batch = y_val.reshape((-1, batch_size)).mean(dim=1, keepdim=True) 
+y_val_batch = y_val.reshape((-1, batch_size))#.mean(dim=1, keepdim=True) 
 
 # GENERATE DATA FOR SOURCE DOMAIN
 dimX_source = 1

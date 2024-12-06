@@ -54,16 +54,16 @@ class UtilityFunction(nn.Module):
         '''
         # reshape into the right batch size
         with torch.enable_grad():
-            X = X.reshape((-1, self.batch_size)).float()
-            y = y.reshape((-1, self.batch_size)).float()
+            X_reshaped = X.view((-1, self.batch_size)).float()
+            y_reshaped = y.view((-1, self.batch_size)).float()
             
             self.classifier.train()
             criterion = nn.MSELoss()
             optimizer = optim.Adam(self.classifier.parameters(), lr=0.001)
 
             optimizer.zero_grad()
-            outputs = self.classifier(X)
-            loss = criterion(outputs, y)
+            outputs = self.classifier(X_reshaped)
+            loss = criterion(outputs, y_reshaped)
             loss.backward()
             optimizer.step()
         return self.classifier
@@ -74,7 +74,7 @@ class UtilityFunction(nn.Module):
         #bootstrap generation_window samples from X_rem
         np.random.seed(seed)        
         #the autoregressive generation loop
-        X_context, y_context = deepcopy(X_init), deepcopy(y_init)
+        X_context, y_context = deepcopy(X_init).requires_grad_(), deepcopy(y_init).requires_grad_()
         sequence_model.eval()
         sequence_model.likelihood.eval()
         generation_window = X_rem.shape[0] if X_rem is not None else 0
@@ -86,7 +86,7 @@ class UtilityFunction(nn.Module):
             if y_hat.ndim != 2: 
                 y_hat = y_hat.unsqueeze(0).unsqueeze(1) if y_hat.ndim==0 else y_hat.unsqueeze(1)
 
-            sequence_model = sequence_model.update(next_token, y_hat)
+            sequence_model = sequence_model.update(next_token, y_hat) 
             X_context = torch.vstack([X_context, next_token])
             y_context = torch.vstack([y_context, y_hat])
             

@@ -69,10 +69,14 @@ class TurboM(Turbo1):
         device="cpu",
         dtype="float64",
         utility_function_class=None,
+        X_val = None, fX_val = None
     ):
         self.n_trust_regions = n_trust_regions
         self.X_init = X_init
-        self.fX_init = fX_init
+        self.fX_init_original = fX_init
+        self.fX_init = self.fX_init_original.mean(dim=1, keepdim=True) 
+        self.X_val = X_val
+        self.fX_val = fX_val
         
         super().__init__(
             f=f,
@@ -179,7 +183,7 @@ class TurboM(Turbo1):
 
         # Define the acquisition function using your utility function class
         best_f = fX_normalized.min() #.item()
-        acquisition_function = self.utility_function_class(model, best_f=best_f)
+        acquisition_function = self.utility_function_class(model, best_f=best_f, init_set=(self.X_init, self.fX_init_original), val_set=(self.X_val, self.fX_val))
 
         # Optimize the acquisition function to find candidate points
         X_cand = self.optimize_acquisition_function(acquisition_function, length)
