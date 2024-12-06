@@ -66,13 +66,14 @@ for epoch in range(num_epochs_target):
 
     print(f"Fine-tuning Epoch [{epoch + 1}/{num_epochs_target}], Loss: {loss.item():.4f}")
 
+torch.save(mlp, 'model/mlp_trained_model.ptn')
 # Initialize the TuRBO-M optimizer
 turbo_m = TurboM(
     f=mlp,
     lb=lb,
     ub=ub,
-    n_init=2 * dim,
-    max_evals=50,
+    n_init=dim,
+    max_evals=21,
     n_trust_regions=2,
     batch_size=1,
     verbose=True,
