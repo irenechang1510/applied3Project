@@ -20,28 +20,29 @@ class BayesianLinearRegression:
     
     def generate_data_given_U(self, U, n_samples, seed=1, logistic=False, epsilon=1):
         self.U = U
-        
         np.random.seed(seed)
 
+        # Generate X based on whether dimX is 1 or more
         if self.dimX == 1: 
             X = np.random.normal(self.mu_x.flatten(), self.Sigma_x.flatten(), n_samples)
         else:
             X = np.random.multivariate_normal(self.mu_x, self.Sigma_x, n_samples)
+        
         epsilon = np.random.normal(0, self.sigma_y, n_samples)
-
         y = X.dot(U) + epsilon 
+
         if logistic:
             y_sigmoid = 1 / (1 + np.exp(-y))
             y = np.random.binomial(1, y_sigmoid)
 
-        # Reshape if dimX = 1
+        # If dimX=1, reshape X to (n_samples, 1)
         if self.dimX == 1:
             X = X.reshape(-1, 1)
         
-        # Convert X, y, epsilon to torch tensors
-        X = torch.from_numpy(X).double()           # double precision for consistency
-        y = torch.from_numpy(y.reshape(-1, 1)).double()
-        epsilon = torch.from_numpy(epsilon).double()
+        # Convert everything to torch.float32 for consistency
+        X = torch.tensor(X, dtype=torch.float32)
+        y = torch.tensor(y.reshape(-1, 1), dtype=torch.float32)
+        epsilon = torch.tensor(epsilon, dtype=torch.float32)
 
         return X, y, epsilon
 
@@ -62,18 +63,17 @@ blr = BayesianLinearRegression(mu_x, Sigma_x, mu_u, Sigma_u, sigma_y, dimX)
 U_true = blr.U
 seed1, seed2, seed3 = 1, 42, 20
 
-# Now these returned values are already torch tensors
+# Now these returned values are already torch tensors (float32)
 X_init, y_init, _ = blr.generate_data_given_U(blr.U, n_init_samples, seed=seed1, logistic=False, epsilon=None)
 X_pool, y_pool, _ = blr.generate_data_given_U(blr.U, n_unlabeled_samples, seed=seed2, logistic=False, epsilon=None)
 X_val, y_val, _ = blr.generate_data_given_U(blr.U, n_val_samples, seed=seed3, logistic=False, epsilon=None)
 
-# All these are already torch tensors, no need to convert
 batch_size = 10
 X_init_batch = X_init.reshape((-1, batch_size))
-y_init_batch = y_init.reshape((-1, batch_size))#.mean(dim=1, keepdim=True) 
+y_init_batch = y_init.reshape((-1, batch_size))
 X_pool_batch = X_pool.reshape((-1, batch_size))
 X_val_batch = X_val.reshape((-1, batch_size))
-y_val_batch = y_val.reshape((-1, batch_size))#.mean(dim=1, keepdim=True) 
+y_val_batch = y_val.reshape((-1, batch_size))
 
 # GENERATE DATA FOR SOURCE DOMAIN
 dimX_source = 1
@@ -92,11 +92,3 @@ X_source, y_source, _ = blr_source.generate_data_given_U(U_source, n_source_samp
 
 X_source_batch = X_source.reshape((-1, batch_size))
 y_source_batch = y_source.reshape((-1, batch_size)).mean(dim=1, keepdim=True)
-
-
-# check sequence generation loss (Can GP approximate ppd?)
-# inference_model = GPRegressionModel(train_x=X_train.flatten(), train_y=y_train.flatten()).double()
-# e = SequenceLossEvaluator()
-# gp_mse_loss = e.evaluate(inference_model, (X_test, y_test), batchsize=50)['mse_loss']
-# np.save('gp_mse_loss', np.array(gp_mse_loss))
-
