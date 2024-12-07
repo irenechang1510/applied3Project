@@ -63,11 +63,14 @@ class ExpectedImprovementCustom(AcquisitionFunction):
         # with torch.set_grad_enabled(True):
         mean_squared_error = MSELoss()
         # ufunc = UtilityFunction(mean_squared_error, f) # TODO: HOW TO PASS f IN
-        ufunc = UtilityFunction(mean_squared_error, myMLP, n_repeats=1)
+        ufunc = UtilityFunction(mean_squared_error, myMLP, n_repeats=5)
         X_detached = X.detach().requires_grad_()
         X_reshaped = X_detached.contiguous().reshape((-1,1))
-        before_loss = ufunc(self.X_init.view((-1,1)), self.y_init.view((-1,1)), None, self.X_val, self.y_val)
-        after_loss = ufunc(self.X_init.view((-1,1)), self.y_init.view((-1,1)), X_reshaped, self.X_val, self.y_val)
+        # print(f"X_reshaped: {X_reshaped.shape}")
+        # print(f"X_init: {self.X_init.shape}")
+        # print(f"X_init.view: {self.X_init.view((-1,1)).shape}")
+        before_loss = ufunc(self.X_init.view((-1,1)), self.y_init, None, self.X_val, self.y_val)
+        after_loss = ufunc(self.X_init.view((-1,1)), self.y_init, X_reshaped, self.X_val, self.y_val)
         # print(loss)
         reduc = (before_loss - after_loss).view(-1)
 
