@@ -3,6 +3,7 @@ from src.synthetic_data import X_source_batch, y_source_batch, X_init, y_init, X
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import traceback
 
 # X_source_batch = X_source_batch
 # y_source_batch = y_source_batch
@@ -20,6 +21,9 @@ class MLP(nn.Module):
         )
     
     def forward(self, x):
+        if x.dtype != torch.float32:
+            print(f"Input dtype is {x.dtype}, expected torch.float32. Shape: {x.shape}")
+            traceback.print_stack()
         return self.network(x)
 
 # # Model parameters
