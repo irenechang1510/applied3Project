@@ -18,7 +18,7 @@ class UtilityFunction(nn.Module):
         '''
         super().__init__()
         self.loss_function = loss_function
-        self.classifier = deepcopy(classifier) # this will be the mlp
+        self.classifier = deepcopy(classifier).to("cuda") # this will be the mlp
         self.n_repeats = n_repeats
         self.batch_size = batch_size
     
@@ -47,7 +47,6 @@ class UtilityFunction(nn.Module):
             new_preds = self.classifier(X_val)
             loss = self.loss_function(new_preds, y_val)
             loss_list.append(loss)
-
         return torch.stack(loss_list).mean().reshape(1, 1)
 
     def update_predictive_model(self, X, y):
@@ -80,11 +79,12 @@ class UtilityFunction(nn.Module):
             optimizer.step()
         return self.classifier
 
-    def sample_conditional_mean_gp(self, X_init, y_init, X_rem = None, seed = None):
+    def sample_conditional_mean_gp(self, X_init, y_init, X_rem = None, seed = None, device="cuda:0"):
+        execution_device = device
         # print(f"train x:{X_init.shape}")
         y_init = y_init.repeat_interleave(self.batch_size) 
         # print(f"train y:{y_init.shape}")
-        sequence_model = GPRegressionModel(train_x=X_init, train_y=y_init).double()
+        sequence_model = GPRegressionModel(train_x=X_init, train_y=y_init).double().to(execution_device)
 
         #bootstrap generation_window samples from X_rem
         np.random.seed(seed)        
@@ -93,11 +93,12 @@ class UtilityFunction(nn.Module):
         sequence_model.eval()
         sequence_model.likelihood.eval()
         generation_window = X_rem.shape[0] if X_rem is not None else 0
+        # print("generation_window: ", generation_window)
         for i in range(generation_window):
             next_token = X_rem[i]
             # print(f"next token:{next_token.shape}")
-            y_hat= sequence_model.predict(next_token)
-            y_hat = y_hat.to('cpu') if hasattr(y_hat, 'device') else y_hat
+            y_hat= sequence_model.predict(next_token.to(execution_device))
+            # y_hat = y_hat.to('cpu') if hasattr(y_hat, 'device') else y_hat
             y_hat = torch.tensor(y_hat) if not isinstance(y_hat, torch.Tensor) else y_hat
             # if y_hat.ndim != 2: 
             #     y_hat = y_hat.unsqueeze(0).unsqueeze(1) if y_hat.ndim==0 else y_hat.unsqueeze(1)
@@ -110,4 +111,13 @@ class UtilityFunction(nn.Module):
             
         return X_context, y_context
 
-# EXAMPLE USAGE
+# def check_model_device_type(model):
+#     try:
+#         if hasattr(model, "device"):
+#             return model.device
+#         elif hasattr(model, "parameters"):
+#             return next(model.parameters()).device
+            
+#     except Exception as e:
+#         print(f"Could not determine device for {model}: {e}")
+#         return None

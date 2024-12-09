@@ -22,6 +22,7 @@ class TurboM(Turbo1):
         n_init,
         max_evals,
         n_trust_regions,
+        n_repeats,
         X_init=None,
         fX_init=None,
         batch_size=1,
@@ -34,7 +35,8 @@ class TurboM(Turbo1):
         dtype="float64",
         utility_function_class=None,
         X_val=None,
-        fX_val=None
+        fX_val=None,
+        generation_window_frac_10=1000
     ):
         self.n_trust_regions = n_trust_regions
         self.X_init = X_init  # Expecting already a torch tensor
@@ -42,6 +44,8 @@ class TurboM(Turbo1):
         self.fX_init = self.fX_init_original.mean(dim=1, keepdim=True) 
         self.X_val = X_val  # Expecting torch tensor
         self.fX_val = fX_val  # Expecting torch tensor
+        self.n_repeats = n_repeats
+        self.generation_window = generation_window_frac_10
 
         super().__init__(
             f=f,
@@ -141,7 +145,6 @@ class TurboM(Turbo1):
         # Squeeze to ensure 1D shape
         fX_normalized = fX_normalized.squeeze(-1)
 
-        print(fX_normalized.shape)
         if hypers is not None and hypers != {}:
             model = train_gp(
                 train_x=X,
@@ -164,7 +167,8 @@ class TurboM(Turbo1):
             model,
             best_f=best_f,
             init_set=(self.X_init, self.fX_init_original),
-            val_set=(self.X_val, self.fX_val)
+            val_set=(self.X_val, self.fX_val),
+            n_repeats = self.n_repeats
         )
 
         X_cand = self.optimize_acquisition_function(acquisition_function, length)
@@ -182,8 +186,7 @@ class TurboM(Turbo1):
         tr_ub = torch.clamp(self.center + length / 2.0, min=0.0, max=1.0)
 
         # Number of random samples for candidate search (simple random search)
-        n_samples = 10
-        X_candidates = torch.rand(n_samples, self.dim, dtype=self.dtype, device=self.device)
+        X_candidates = torch.rand(self.generation_window, self.dim, dtype=self.dtype, device=self.device)
         X_candidates = tr_lb + (tr_ub - tr_lb) * X_candidates
 
         with torch.no_grad():

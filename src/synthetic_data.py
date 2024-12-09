@@ -76,13 +76,14 @@ mu_u = np.zeros(dimX)
 Sigma_u = np.eye(dimX)
 sigma_y = 1
 
-n_init_samples, n_unlabeled_samples, n_val_samples = 200, 100, 200
+n_init_samples, n_unlabeled_samples, n_val_samples = 500, 500, 200
+n_test_samples=100
 
 # Set a fixed u_seed to ensure reproducibility of U
 blr = BayesianLinearRegression(mu_x, Sigma_x, mu_u, Sigma_u, sigma_y, dimX, u_seed=42)
 U_true = blr.U
 
-seed1, seed2, seed3 = 1, 42, 20
+seed1, seed2, seed3, seed4 = 1, 42, 20, 500
 X_init, y_init, _ = blr.generate_data_given_U(U_true, n_init_samples, seed=seed1, logistic=False, epsilon=None)
 X_pool, y_pool, _ = blr.generate_data_given_U(U_true, n_unlabeled_samples, seed=seed2, logistic=False, epsilon=None)
 X_val, y_val, _ = blr.generate_data_given_U(U_true, n_val_samples, seed=seed3, logistic=False, epsilon=None)
@@ -92,6 +93,7 @@ batch_size = 10
 X_init_batch = X_init.reshape((-1, batch_size))
 y_init_batch = y_init.reshape((-1, batch_size)).mean(dim=1, keepdim=True)
 X_pool_batch = X_pool.reshape((-1, batch_size))
+y_pool_batch = y_pool.reshape((-1, batch_size)).mean(dim=1, keepdim=True)
 X_val_batch = X_val.reshape((-1, batch_size))
 y_val_batch = y_val.reshape((-1, batch_size)).mean(dim=1, keepdim=True)
 
@@ -116,5 +118,10 @@ X_source, y_source, _ = blr_source.generate_data_given_U(U_source, n_source_samp
 X_source_batch = X_source.reshape((-1, batch_size))
 y_source_batch = y_source.reshape((-1, batch_size)).mean(dim=1, keepdim=True)
 
-
-
+#################
+### Test
+#################
+blr_test = BayesianLinearRegression(mu_x, Sigma_x, mu_u, Sigma_u, sigma_y, dimX, u_seed=0)
+X_test, y_test, _ = blr_test.generate_data_given_U(blr_test.U, n_test_samples, seed=seed4, logistic=False, epsilon=None)
+X_test_batch = X_test.reshape((-1, batch_size))
+y_test_batch = y_test.reshape((-1, batch_size)).mean(dim=1, keepdim=True)

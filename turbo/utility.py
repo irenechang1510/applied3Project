@@ -17,7 +17,7 @@ myMLP = torch.load('model/mlp_trained_model.pth')
 class ExpectedImprovementCustom(AcquisitionFunction):
     """Custom Expected Improvement acquisition function."""
 
-    def __init__(self, model, best_f, init_set, val_set):
+    def __init__(self, model, best_f, init_set, val_set, n_repeats):
         """Initialize the acquisition function.
 
         Parameters
@@ -31,6 +31,7 @@ class ExpectedImprovementCustom(AcquisitionFunction):
         self.best_f = best_f
         self.X_init, self.y_init = init_set
         self.X_val, self.y_val = val_set # these are batched
+        self.n_repeats = n_repeats
 
     def forward(self, X):
         """Compute the Expected Improvement at points X.
@@ -63,12 +64,9 @@ class ExpectedImprovementCustom(AcquisitionFunction):
         # with torch.set_grad_enabled(True):
         mean_squared_error = MSELoss()
         # ufunc = UtilityFunction(mean_squared_error, f) # TODO: HOW TO PASS f IN
-        ufunc = UtilityFunction(mean_squared_error, myMLP, n_repeats=5)
+        ufunc = UtilityFunction(mean_squared_error, myMLP, n_repeats=self.n_repeats)
         X_detached = X.detach().requires_grad_()
         X_reshaped = X_detached.contiguous().reshape((-1,1))
-        # print(f"X_reshaped: {X_reshaped.shape}")
-        # print(f"X_init: {self.X_init.shape}")
-        # print(f"X_init.view: {self.X_init.view((-1,1)).shape}")
         before_loss = ufunc(self.X_init.view((-1,1)), self.y_init, None, self.X_val, self.y_val)
         after_loss = ufunc(self.X_init.view((-1,1)), self.y_init, X_reshaped, self.X_val, self.y_val)
         # print(loss)

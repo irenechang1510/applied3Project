@@ -37,7 +37,7 @@ class GPRegressionModel(gpytorch.models.ExactGP):
         if y.device != model_device:
             y = y.to(model_device)
 
-        fantasy_model = self.get_fantasy_model(X, y) # which device does this put on
+        fantasy_model = self.get_fantasy_model(X, y).to(model_device) # which device does this put on
         
         return fantasy_model
 
