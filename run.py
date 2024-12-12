@@ -91,7 +91,7 @@ for k in range(50, 500, 50):
         generation_window_frac_10=5,
         verbose=True,
         utility_function_class=ExpectedImprovementCustom,
-        X_init=X_init_batch_k.to("cuda"),
+        X_init=X_init_batch.to("cuda"),
         fX_init=y_init_batch_k.to("cuda"),
         X_val = X_val_batch.to("cuda"),
         fX_val = y_val_batch.to("cuda"),
